@@ -1,6 +1,6 @@
 workflows:
   guru-jothidam-android:
-    name: Guru Jothidam Android
+    name: Guru Jothidam Android - Final
     max_build_duration: 60
     instance_type: mac_mini_m2
 
@@ -8,55 +8,62 @@ workflows:
       java: 17
 
     scripts:
-      - name: Set Android SDK location
+      - name: Set Android SDK
         script: |
+          set -e
           cd "$CM_BUILD_DIR/GuruJothidamAndroid"
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
-      - name: Check project
+      - name: Install Gradle 8.7
         script: |
-          cd "$CM_BUILD_DIR/GuruJothidamAndroid"
-          echo "=== Java ==="
-          java -version
-          echo "=== Project ==="
-          ls -la
+          set -e
+          cd "$CM_BUILD_DIR"
 
-      - name: Prepare Gradle
+          curl -fL --retry 3 \
+            -o gradle-8.7-bin.zip \
+            https://services.gradle.org/distributions/gradle-8.7-bin.zip
+
+          unzip -q -o gradle-8.7-bin.zip
+
+          test -x "$CM_BUILD_DIR/gradle-8.7/bin/gradle"
+
+          "$CM_BUILD_DIR/gradle-8.7/bin/gradle" --version
+
+      - name: Clean Android project
         script: |
+          set -e
           cd "$CM_BUILD_DIR/GuruJothidamAndroid"
 
-          if [ ! -f gradlew ]; then
-            echo "Creating Gradle wrapper..."
-            gradle wrapper --gradle-version 8.7
-          fi
+          "$CM_BUILD_DIR/gradle-8.7/bin/gradle" \
+            --no-daemon clean
 
-          chmod +x gradlew
-
-      - name: Clean
+      - name: Build installable APK
         script: |
+          set -e
           cd "$CM_BUILD_DIR/GuruJothidamAndroid"
-          ./gradlew clean
 
-      - name: Build APK
-        script: |
-          cd "$CM_BUILD_DIR/GuruJothidamAndroid"
-          ./gradlew assembleRelease --stacktrace
+          "$CM_BUILD_DIR/gradle-8.7/bin/gradle" \
+            --no-daemon \
+            assembleDebug \
+            --stacktrace
 
       - name: Verify APK
         script: |
-          cd "$CM_BUILD_DIR/GuruJothidamAndroid"
+          set -e
 
-          find app/build/outputs -name "*.apk" -type f -print
+          APK="$CM_BUILD_DIR/GuruJothidamAndroid/app/build/outputs/apk/debug/app-debug.apk"
 
-          APK=$(find app/build/outputs -name "*.apk" -type f | head -1)
-
-          if [ -z "$APK" ]; then
-            echo "ERROR: APK was not generated"
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: APK was not created."
+            find "$CM_BUILD_DIR/GuruJothidamAndroid/app/build/outputs" \
+              -type f -print || true
             exit 1
           fi
 
-          echo "APK generated successfully:"
+          echo "======================================"
+          echo "SUCCESS: APK CREATED"
+          echo "======================================"
           ls -lh "$APK"
 
     artifacts:
-      - GuruJothidamAndroid/app/build/outputs/**/*.apk
+      - GuruJothidamAndroid/app/build/outputs/apk/debug/app-debug.apk

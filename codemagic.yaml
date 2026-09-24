@@ -1,1 +1,68 @@
 
+workflows:
+  guru-jothidam-android:
+    name: Guru Jothidam Android Release
+    max_build_duration: 60
+    instance_type: linux_x2
+
+    environment:
+      java: 17
+
+    scripts:
+      - name: Set Android SDK location
+        script: |
+          cd "$CM_BUILD_DIR/GuruJothidamAndroid"
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+
+      - name: Check Android project
+        script: |
+          cd "$CM_BUILD_DIR/GuruJothidamAndroid"
+          echo "=== Project files ==="
+          find . -maxdepth 2 -type f | sort
+          echo "=== Java version ==="
+          java -version
+          echo "=== Android SDK ==="
+          echo "$ANDROID_SDK_ROOT"
+
+      - name: Prepare Gradle
+        script: |
+          cd "$CM_BUILD_DIR/GuruJothidamAndroid"
+
+          if [ ! -f gradlew ]; then
+            echo "Gradle wrapper not found. Creating Gradle wrapper..."
+            gradle wrapper --gradle-version 8.7
+          fi
+
+          chmod +x gradlew
+
+      - name: Clean project
+        script: |
+          cd "$CM_BUILD_DIR/GuruJothidamAndroid"
+          ./gradlew clean
+
+      - name: Build release APK
+        script: |
+          cd "$CM_BUILD_DIR/GuruJothidamAndroid"
+          ./gradlew assembleRelease --stacktrace
+
+      - name: Verify APK
+        script: |
+          cd "$CM_BUILD_DIR/GuruJothidamAndroid"
+
+          echo "=== Generated APK files ==="
+          find app/build/outputs -type f -name "*.apk" -print
+
+          APK=$(find app/build/outputs -type f -name "*.apk" | head -1)
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: APK was not generated."
+            exit 1
+          fi
+
+          echo "APK successfully generated:"
+          ls -lh "$APK"
+
+    artifacts:
+      - GuruJothidamAndroid/app/build/outputs/apk/release/*.apk
+      - GuruJothidamAndroid/app/build/outputs/**/*.apk
+      - GuruJothidamAndroid/app/build/outputs/**/mapping.txt
